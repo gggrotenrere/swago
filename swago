@@ -1,0 +1,846 @@
+# 🎯 Модуль 1: Пошаговая настройка по виртуальным машинам
+
+Ниже — **все команды в порядке выполнения**, сгруппированные по машинам. IP-адреса заменены на плейсхолдеры вида `<...>`, чтобы вы могли подставить свои значения.
+
+---
+
+## 📋 Таблица плейсхолдеров (для замены)
+
+| Плейсхолдер | Что подставить | Пример |
+|---|---|---|
+| `<DOMAIN>` | Доменное имя | `au-team.irpo` |
+| `<ISP-EXT>` | Внешний интерфейс ISP (DHCP) | `ens19` |
+| `<ISP-HQ>` | Интерфейс ISP в сторону HQ-RTR | `ens20` |
+| `<ISP-BR>` | Интерфейс ISP в сторону BR-RTR | `ens21` |
+| `<HQ-SRV-IF>` | Интерфейс HQ-SRV | `ens19` |
+| `<BR-SRV-IF>` | Интерфейс BR-SRV | `ens19` |
+| `<HQ-RTR-ISP-IF>` | Интерфейс HQ-RTR в сторону ISP | `isp` (или `ge0`) |
+| `<HQ-RTR-LAN-IF>` | Интерфейс HQ-RTR в сторону HQ-SW | `ge1` |
+| `<BR-RTR-ISP-IF>` | Интерфейс BR-RTR в сторону ISP | `isp` (или `ge0`) |
+| `<BR-RTR-LAN-IF>` | Интерфейс BR-RTR в сторону BR-SRV | `ge1` |
+| `<IP-HQ-RTR-ISP>` | IP HQ-RTR в сторону ISP | `172.16.1.2/28` |
+| `<IP-BR-RTR-ISP>` | IP BR-RTR в сторону ISP | `172.16.2.2/28` |
+| `<IP-ISP-HQ>` | IP ISP в сторону HQ-RTR | `172.16.1.1/28` |
+| `<IP-ISP-BR>` | IP ISP в сторону BR-RTR | `172.16.2.1/28` |
+| `<IP-HQ-SRV>` | IP HQ-SRV | `192.168.100.2/27` |
+| `<IP-BR-SRV>` | IP BR-SRV | `192.168.0.2/28` |
+| `<IP-HQ-RTR-V100>` | IP HQ-RTR в VLAN 100 | `192.168.100.1/27` |
+| `<IP-HQ-RTR-V200>` | IP HQ-RTR в VLAN 200 | `192.168.200.1/24` |
+| `<IP-HQ-RTR-V999>` | IP HQ-RTR в VLAN 999 | `192.168.99.1/29` |
+| `<IP-BR-RTR-LAN>` | IP BR-RTR в сторону BR-SRV | `192.168.0.1/28` |
+| `<GW-ISP-HQ>` | Шлюз для HQ-RTR | `172.16.1.1` |
+| `<GW-ISP-BR>` | Шлюз для BR-RTR | `172.16.2.1` |
+| `<GW-HQ-SRV>` | Шлюз для HQ-SRV | `192.168.100.1` |
+| `<GW-BR-SRV>` | Шлюз для BR-SRV | `192.168.0.1` |
+| `<GW-HQ-CLI>` | Шлюз для HQ-CLI | `192.168.200.1` |
+| `<DNS-PUBLIC>` | Публичный DNS | `77.88.8.8` |
+| `<DNS-HQ-SRV>` | DNS-сервер (HQ-SRV) | `192.168.100.2` |
+| `<TUN-HQ>` | IP туннеля на HQ-RTR | `10.10.10.1/30` |
+| `<TUN-BR>` | IP туннеля на BR-RTR | `10.10.10.2/30` |
+| `<TIMEZONE>` | Часовой пояс | `Europe/Moscow` |
+
+---
+
+# 🖥️ МАШИНА 1: ISP (ОС «Альт»)
+
+### Шаг 1. Смена имени
+```bash
+hostnamectl set-hostname ISP
+exec bash
+```
+
+### Шаг 2. Определение интерфейсов
+```bash
+ip -c a
+```
+Запомните, какой интерфейс куда смотрит (по MAC-адресам).
+
+### Шаг 3. Настройка внешнего интерфейса (DHCP)
+```bash
+mkdir /etc/net/ifaces/<ISP-EXT>
+vim /etc/net/ifaces/<ISP-EXT>/options
+```
+Содержимое:
+```text
+TYPE=eth
+BOOTPROTO=dhcp
+DISABLED=no
+NM_CONTROLLED=no
+SYSTEMD_CONTROLLED=no
+```
+
+### Шаг 4. Настройка интерфейса в сторону HQ-RTR
+```bash
+mkdir /etc/net/ifaces/<ISP-HQ>
+vim /etc/net/ifaces/<ISP-HQ>/options
+```
+Содержимое:
+```text
+TYPE=eth
+BOOTPROTO=static
+DISABLED=no
+NM_CONTROLLED=no
+SYSTEMD_CONTROLLED=no
+```
+```bash
+echo "<IP-ISP-HQ>" > /etc/net/ifaces/<ISP-HQ>/ipv4address
+```
+
+### Шаг 5. Настройка интерфейса в сторону BR-RTR
+```bash
+mkdir /etc/net/ifaces/<ISP-BR>
+vim /etc/net/ifaces/<ISP-BR>/options
+```
+Содержимое:
+```text
+TYPE=eth
+BOOTPROTO=static
+DISABLED=no
+NM_CONTROLLED=no
+SYSTEMD_CONTROLLED=no
+```
+```bash
+echo "<IP-ISP-BR>" > /etc/net/ifaces/<ISP-BR>/ipv4address
+```
+
+### Шаг 6. Применение сетевых настроек
+```bash
+systemctl restart network
+```
+
+### Шаг 7. Проверка
+```bash
+ip -c a
+ip -c r
+ping -c3 <DNS-PUBLIC>
+```
+
+### Шаг 8. Включение форвардинга
+```bash
+sed -i "s/net.ipv4.ip_forward = 0/net.ipv4.ip_forward = 1/g" /etc/net/sysctl.conf
+systemctl restart network
+sysctl net.ipv4.ip_forward
+```
+
+### Шаг 9. Установка iptables и настройка NAT
+```bash
+apt-get update
+apt-get install -y iptables
+iptables -t nat -A POSTROUTING -s 172.16.1.0/28 -o <ISP-EXT> -j MASQUERADE
+iptables -t nat -A POSTROUTING -s 172.16.2.0/28 -o <ISP-EXT> -j MASQUERADE
+iptables-save > /etc/sysconfig/iptables
+systemctl enable --now iptables
+```
+
+### Шаг 10. Проверка NAT
+```bash
+iptables -t nat -L -n -v
+```
+
+### Шаг 11. Часовой пояс
+```bash
+timedatectl set-timezone <TIMEZONE>
+timedatectl
+```
+
+---
+
+# 🖥️ МАШИНА 2: HQ-RTR (EcoRouterOS)
+
+### Шаг 1. Вход и смена имени
+```text
+enable
+configure terminal
+hostname hq-rtr
+ip domain-name <DOMAIN>
+write memory
+```
+
+### Шаг 2. Проверка портов
+```text
+show port brief
+```
+
+### Шаг 3. Настройка интерфейса в сторону ISP
+```text
+configure terminal
+interface isp
+ description "ISP"
+ ip address <IP-HQ-RTR-ISP>
+ exit
+port <HQ-RTR-ISP-IF>
+ service-instance <HQ-RTR-ISP-IF>/isp
+  encapsulation untagged
+  connect ip interface isp
+  exit
+ exit
+ip route 0.0.0.0/0 <GW-ISP-HQ>
+write memory
+```
+
+### Шаг 4. Настройка VLAN-интерфейсов (100, 200, 999)
+```text
+configure terminal
+interface v100
+ description "VLAN 100"
+ ip address <IP-HQ-RTR-V100>
+ exit
+interface v200
+ description "VLAN 200"
+ ip address <IP-HQ-RTR-V200>
+ exit
+interface v999
+ description "VLAN 999"
+ ip address <IP-HQ-RTR-V999>
+ exit
+write memory
+```
+
+### Шаг 5. Привязка VLAN к порту (в сторону HQ-SW)
+```text
+configure terminal
+port <HQ-RTR-LAN-IF>
+ service-instance <HQ-RTR-LAN-IF>/v100
+  encapsulation dot1q 100 exact
+  rewrite pop 1
+  connect ip interface v100
+  exit
+ service-instance <HQ-RTR-LAN-IF>/v200
+  encapsulation dot1q 200 exact
+  rewrite pop 1
+  connect ip interface v200
+  exit
+ service-instance <HQ-RTR-LAN-IF>/v999
+  encapsulation dot1q 999 exact
+  rewrite pop 1
+  connect ip interface v999
+  exit
+ exit
+write memory
+```
+
+### Шаг 6. Проверка IP-адресов
+```text
+show ip interface brief
+show service-instance brief
+```
+
+### Шаг 7. Создание пользователя net_admin
+```text
+configure terminal
+username net_admin
+ password P@ssw0rd
+ role admin
+ exit
+write memory
+```
+
+### Шаг 8. Создание GRE-туннеля
+```text
+configure terminal
+interface tunnel.0
+ description "GRE"
+ ip address <TUN-HQ>
+ ip tunnel <IP-HQ-RTR-ISP-без-префикса> <IP-BR-RTR-ISP-без-префикса> mode gre
+ exit
+write memory
+```
+**Проверка:**
+```text
+show interface tunnel.0
+ping 10.10.10.2
+```
+
+### Шаг 9. Динамическая маршрутизация OSPF
+```text
+configure terminal
+router ospf 1
+ ospf router-id 10.10.10.1
+ passive-interface default
+ no passive-interface tunnel.0
+ network 10.10.10.0/30 area 0
+ network 192.168.100.0/27 area 0
+ network 192.168.200.0/24 area 0
+ network 192.168.99.0/29 area 0
+ exit
+interface tunnel.0
+ ip ospf authentication message-digest
+ ip ospf message-digest-key 1 md5 P@ssw0rd
+ exit
+write memory
+```
+
+### Шаг 10. Проверка OSPF
+```text
+show ip ospf neighbor
+show ip route ospf
+show ip ospf interface tunnel.0
+```
+
+### Шаг 11. Динамическая трансляция адресов (NAT)
+```text
+configure terminal
+interface isp
+ ip nat outside
+ exit
+interface v100
+ ip nat inside
+ exit
+interface v200
+ ip nat inside
+ exit
+interface v999
+ ip nat inside
+ exit
+ip nat pool VLAN100 <IP-HQ-RTR-V100-без-префикса-минус-1>-<последний-адрес>
+ip nat pool VLAN200 <IP-HQ-RTR-V200-без-префикса-минус-1>-<последний-адрес>
+ip nat pool VLAN999 <IP-HQ-RTR-V999-без-префикса-минус-1>-<последний-адрес>
+ip nat source dynamic inside-to-outside pool VLAN100 overload interface isp
+ip nat source dynamic inside-to-outside pool VLAN200 overload interface isp
+ip nat source dynamic inside-to-outside pool VLAN999 overload interface isp
+write memory
+```
+**Проверка:**
+```text
+show ip nat translations
+```
+
+### Шаг 12. DHCP-сервер для HQ-CLI
+```text
+configure terminal
+ip pool VLAN200 192.168.200.2-192.168.200.254
+dhcp-server 1
+ pool VLAN200 1
+  mask 24
+  gateway 192.168.200.1
+  dns <DNS-HQ-SRV-без-префикса>
+  domain-name <DOMAIN>
+  exit
+ exit
+interface v200
+ dhcp-server 1
+ exit
+write memory
+```
+**Проверка:**
+```text
+show running-config dhcp-server 1
+show dhcp-server clients v200
+```
+
+### Шаг 13. Часовой пояс
+```text
+configure terminal
+ntp timezone utc+3
+write memory
+show ntp timezone
+```
+
+### Шаг 14. Разрешение SSH для Ansible (если нужно)
+```text
+configure terminal
+security none
+write memory
+```
+
+---
+
+# 🖥️ МАШИНА 3: BR-RTR (EcoRouterOS)
+
+### Шаг 1. Вход и смена имени
+```text
+enable
+configure terminal
+hostname br-rtr
+ip domain-name <DOMAIN>
+write memory
+```
+
+### Шаг 2. Настройка интерфейса в сторону ISP
+```text
+configure terminal
+interface isp
+ description "ISP"
+ ip address <IP-BR-RTR-ISP>
+ exit
+port <BR-RTR-ISP-IF>
+ service-instance <BR-RTR-ISP-IF>/isp
+  encapsulation untagged
+  connect ip interface isp
+  exit
+ exit
+ip route 0.0.0.0/0 <GW-ISP-BR>
+write memory
+```
+
+### Шаг 3. Настройка интерфейса в сторону BR-SRV
+```text
+configure terminal
+interface int1
+ description "BR-Net"
+ ip address <IP-BR-RTR-LAN>
+ exit
+port <BR-RTR-LAN-IF>
+ service-instance <BR-RTR-LAN-IF>/int1
+  encapsulation untagged
+  connect ip interface int1
+  exit
+ exit
+write memory
+```
+
+### Шаг 4. Проверка IP-адресов
+```text
+show ip interface brief
+```
+
+### Шаг 5. Создание пользователя net_admin
+```text
+configure terminal
+username net_admin
+ password P@ssw0rd
+ role admin
+ exit
+write memory
+```
+
+### Шаг 6. Создание GRE-туннеля
+```text
+configure terminal
+interface tunnel.0
+ description "GRE"
+ ip address <TUN-BR>
+ ip tunnel <IP-BR-RTR-ISP-без-префикса> <IP-HQ-RTR-ISP-без-префикса> mode gre
+ exit
+write memory
+```
+**Проверка:**
+```text
+show interface tunnel.0
+ping 10.10.10.1
+```
+
+### Шаг 7. Динамическая маршрутизация OSPF
+```text
+configure terminal
+router ospf 1
+ ospf router-id 10.10.10.2
+ passive-interface default
+ no passive-interface tunnel.0
+ network 10.10.10.0/30 area 0
+ network 192.168.0.0/28 area 0
+ exit
+interface tunnel.0
+ ip ospf authentication message-digest
+ ip ospf message-digest-key 1 md5 P@ssw0rd
+ exit
+write memory
+```
+
+### Шаг 8. Проверка OSPF
+```text
+show ip ospf neighbor
+show ip route ospf
+```
+
+### Шаг 9. Динамическая трансляция адресов (NAT)
+```text
+configure terminal
+interface isp
+ ip nat outside
+ exit
+interface int1
+ ip nat inside
+ exit
+ip nat pool BR-Net 192.168.0.1-192.168.0.14
+ip nat source dynamic inside-to-outside pool BR-Net overload interface isp
+write memory
+```
+**Проверка:**
+```text
+show ip nat translations
+```
+
+### Шаг 10. Часовой пояс
+```text
+configure terminal
+ntp timezone utc+3
+write memory
+show ntp timezone
+```
+
+### Шаг 11. Разрешение SSH для Ansible
+```text
+configure terminal
+security none
+write memory
+```
+
+---
+
+# 🖥️ МАШИНА 4: HQ-SRV (ОС «Альт»)
+
+### Шаг 1. Смена имени
+```bash
+hostnamectl set-hostname hq-srv.<DOMAIN>
+exec bash
+hostname -f
+```
+
+### Шаг 2. Настройка интерфейса
+```bash
+mkdir /etc/net/ifaces/<HQ-SRV-IF>
+vim /etc/net/ifaces/<HQ-SRV-IF>/options
+```
+Содержимое:
+```text
+TYPE=eth
+BOOTPROTO=static
+DISABLED=no
+NM_CONTROLLED=no
+SYSTEMD_CONTROLLED=no
+CONFIG_IPV4=yes
+```
+```bash
+echo "<IP-HQ-SRV>" > /etc/net/ifaces/<HQ-SRV-IF>/ipv4address
+echo "default via <GW-HQ-SRV>" > /etc/net/ifaces/<HQ-SRV-IF>/ipv4route
+echo "nameserver <DNS-PUBLIC>" > /etc/net/ifaces/<HQ-SRV-IF>/resolv.conf
+systemctl restart network
+```
+
+### Шаг 3. Проверка
+```bash
+ip -c a
+ip -c r
+ping -c3 <GW-HQ-SRV>
+```
+
+### Шаг 4. Создание пользователя sshuser
+```bash
+useradd sshuser -u 2026
+passwd sshuser
+# Пароль: P@ssw0rd
+usermod -aG wheel sshuser
+echo "sshuser ALL=(ALL:ALL) NOPASSWD: ALL" >> /etc/sudoers
+id sshuser
+```
+
+### Шаг 5. Настройка SSH
+```bash
+vim /etc/openssh/sshd_config
+```
+Изменить/добавить:
+```text
+Port 2026
+AllowUsers sshuser
+MaxAuthTries 2
+Banner /etc/openssh/banner
+```
+```bash
+echo "Authorized access only" > /etc/openssh/banner
+systemctl restart sshd
+```
+
+### Шаг 6. Часовой пояс
+```bash
+timedatectl set-timezone <TIMEZONE>
+timedatectl
+```
+
+### Шаг 7. Установка и настройка BIND (DNS)
+```bash
+apt-get update && apt-get install -y bind bind-utils
+vim /var/lib/bind/etc/options.conf
+```
+Содержимое:
+```text
+listen-on { <DNS-HQ-SRV-без-префикса>; };
+listen-on-v6 { none; };
+forwarders { <DNS-PUBLIC>; };
+allow-query { any; };
+allow-recursion { any; };
+```
+
+```bash
+vim /var/lib/bind/etc/rfc1912.conf
+```
+Добавить в конец:
+```text
+zone "<DOMAIN>" {
+    type master;
+    file "<DOMAIN>";
+};
+
+zone "100.168.192.in-addr.arpa" {
+    type master;
+    file "100.168.192.in-addr.arpa";
+};
+
+zone "200.168.192.in-addr.arpa" {
+    type master;
+    file "200.168.192.in-addr.arpa";
+};
+```
+
+```bash
+cp /var/lib/bind/etc/zone/empty /var/lib/bind/etc/zone/<DOMAIN>
+cp /var/lib/bind/etc/zone/empty /var/lib/bind/etc/zone/100.168.192.in-addr.arpa
+cp /var/lib/bind/etc/zone/empty /var/lib/bind/etc/zone/200.168.192.in-addr.arpa
+```
+
+**Прямая зона** (`/var/lib/bind/etc/zone/<DOMAIN>`):
+```text
+$TTL 1D
+@ IN SOA <DOMAIN>. root.<DOMAIN>. (
+    2025062300
+    12H
+    1H
+    1W
+    1H
+)
+    IN NS <DOMAIN>.
+hq-srv  IN A <IP-HQ-SRV-без-префикса>
+hq-cli  IN A <IP-HQ-CLI-без-префикса>
+hq-rtr  IN A <IP-HQ-RTR-V100-без-префикса>
+hq-rtr  IN A <IP-HQ-RTR-V200-без-префикса>
+hq-rtr  IN A <IP-HQ-RTR-V999-без-префикса>
+docker  IN A <IP-ISP-HQ-без-префикса>
+web     IN A <IP-ISP-BR-без-префикса>
+br-srv  IN A <IP-BR-SRV-без-префикса>
+br-rtr  IN A <IP-BR-RTR-LAN-без-префикса>
+```
+
+**Обратная зона 100.168.192** (`/var/lib/bind/etc/zone/100.168.192.in-addr.arpa`):
+```text
+$TTL 1D
+@ IN SOA <DOMAIN>. root.<DOMAIN>. (
+    2025062300
+    12H
+    1H
+    1W
+    1H
+)
+    IN NS <DOMAIN>.
+1 IN PTR hq-rtr.<DOMAIN>.
+2 IN PTR hq-srv.<DOMAIN>.
+```
+
+**Обратная зона 200.168.192** (`/var/lib/bind/etc/zone/200.168.192.in-addr.arpa`):
+```text
+$TTL 1D
+@ IN SOA <DOMAIN>. root.<DOMAIN>. (
+    2025062300
+    12H
+    1H
+    1W
+    1H
+)
+    IN NS <DOMAIN>.
+1 IN PTR hq-rtr.<DOMAIN>.
+2 IN PTR hq-cli.<DOMAIN>.
+```
+
+```bash
+rndc-confgen > /etc/bind/rndc.key
+sed -i '6,$d' /etc/bind/rndc.key
+chown -R root:named /var/lib/bind/etc/zone/*
+named-checkconf
+named-checkconf -z
+systemctl enable --now bind
+systemctl status bind
+```
+
+### Шаг 8. Проверка DNS
+```bash
+host hq-srv.<DOMAIN>
+host hq-cli.<DOMAIN>
+host 192.168.100.2
+ping -c3 ya.ru
+```
+
+---
+
+# 🖥️ МАШИНА 5: BR-SRV (ОС «Альт»)
+
+### Шаг 1. Смена имени
+```bash
+hostnamectl set-hostname br-srv.<DOMAIN>
+exec bash
+hostname -f
+```
+
+### Шаг 2. Настройка интерфейса
+```bash
+mkdir /etc/net/ifaces/<BR-SRV-IF>
+vim /etc/net/ifaces/<BR-SRV-IF>/options
+```
+Содержимое:
+```text
+TYPE=eth
+BOOTPROTO=static
+DISABLED=no
+NM_CONTROLLED=no
+SYSTEMD_CONTROLLED=no
+CONFIG_IPV4=yes
+```
+```bash
+echo "<IP-BR-SRV>" > /etc/net/ifaces/<BR-SRV-IF>/ipv4address
+echo "default via <GW-BR-SRV>" > /etc/net/ifaces/<BR-SRV-IF>/ipv4route
+echo "nameserver <DNS-PUBLIC>" > /etc/net/ifaces/<BR-SRV-IF>/resolv.conf
+systemctl restart network
+```
+
+### Шаг 3. Проверка
+```bash
+ip -c a
+ip -c r
+ping -c3 <GW-BR-SRV>
+```
+
+### Шаг 4. Создание пользователя sshuser
+```bash
+useradd sshuser -u 2026
+passwd sshuser
+# Пароль: P@ssw0rd
+usermod -aG wheel sshuser
+echo "sshuser ALL=(ALL:ALL) NOPASSWD: ALL" >> /etc/sudoers
+id sshuser
+```
+
+### Шаг 5. Настройка SSH
+```bash
+vim /etc/openssh/sshd_config
+```
+Изменить/добавить:
+```text
+Port 2026
+AllowUsers sshuser
+MaxAuthTries 2
+Banner /etc/openssh/banner
+```
+```bash
+echo "Authorized access only" > /etc/openssh/banner
+systemctl restart sshd
+```
+
+### Шаг 6. Часовой пояс
+```bash
+timedatectl set-timezone <TIMEZONE>
+timedatectl
+```
+
+---
+
+# 🖥️ МАШИНА 6: HQ-SW (если виртуальная машина, Open vSwitch)
+
+### Шаг 1. Смена имени
+```bash
+hostnamectl set-hostname hq-sw.<DOMAIN>
+exec bash
+```
+
+### Шаг 2. Установка Open vSwitch
+```bash
+apt-get update && apt-get install -y openvswitch
+systemctl enable --now openvswitch
+```
+
+### Шаг 3. Определение интерфейсов
+```bash
+ip -c a
+```
+Определите, какой интерфейс смотрит в сторону HQ-RTR (trunk), HQ-SRV (VLAN 100), HQ-CLI (VLAN 200).
+
+### Шаг 4. Создание моста и портов
+```bash
+ovs-vsctl add-br SW
+ovs-vsctl add-port SW <ИНТЕРФЕЙС-К-HQ-RTR> trunk=100,200,999
+ovs-vsctl add-port SW <ИНТЕРФЕЙС-К-HQ-SRV> tag=100
+ovs-vsctl add-port SW <ИНТЕРФЕЙС-К-HQ-CLI> tag=200
+```
+
+### Шаг 5. Проверка
+```bash
+ovs-vsctl show
+```
+
+### Шаг 6. Часовой пояс (если требуется)
+```bash
+timedatectl set-timezone <TIMEZONE>
+```
+
+---
+
+# 🖥️ МАШИНА 7: HQ-CLI (ОС «Альт Рабочая станция»)
+
+### Шаг 1. Смена имени
+```bash
+hostnamectl set-hostname hq-cli.<DOMAIN>
+exec bash
+```
+
+### Шаг 2. Настройка сети через GUI
+Откройте **Центр управления системой** → **Сеть** → **Проводное соединение**:
+- Метод IPv4: **Автоматический (DHCP)**
+- Нажмите **Применить**
+
+### Шаг 3. Проверка получения IP
+```bash
+ip -c a
+ip -c r
+cat /etc/resolv.conf
+ping -c3 <GW-HQ-CLI>
+ping -c3 <DNS-HQ-SRV-без-префикса>
+```
+
+### Шаг 4. Часовой пояс
+```bash
+timedatectl set-timezone <TIMEZONE>
+timedatectl
+```
+
+---
+
+# ✅ Итоговый порядок выполнения
+
+| № | Машина | Что делаем |
+|---|---|---|
+| 1 | **ISP** | Имя, сеть, форвардинг, NAT, часовой пояс |
+| 2 | **HQ-RTR** | Имя, IP, VLAN, туннель, OSPF, NAT, DHCP, часовой пояс, security none |
+| 3 | **BR-RTR** | Имя, IP, туннель, OSPF, NAT, часовой пояс, security none |
+| 4 | **HQ-SRV** | Имя, IP, sshuser, SSH, DNS (BIND), часовой пояс |
+| 5 | **BR-SRV** | Имя, IP, sshuser, SSH, часовой пояс |
+| 6 | **HQ-SW** | Open vSwitch (VLAN) |
+| 7 | **HQ-CLI** | DHCP-клиент, часовой пояс |
+
+---
+
+# 🎯 Финальная проверка
+
+Выполните на **HQ-CLI**:
+```bash
+ping -c3 <IP-HQ-SRV-без-префикса>
+ping -c3 <IP-BR-SRV-без-префикса>
+ping -c3 <DNS-PUBLIC>
+host hq-srv.<DOMAIN>
+host br-srv.<DOMAIN>
+```
+
+Выполните на **HQ-RTR**:
+```text
+show ip ospf neighbor
+show ip route ospf
+show ip nat translations
+show dhcp-server clients v200
+ping 10.10.10.2
+```
+
+Выполните на **BR-RTR**:
+```text
+show ip ospf neighbor
+show ip route ospf
+show ip nat translations
+ping 10.10.10.1
+```
+
+**Если все пинги проходят и OSPF-соседи в состоянии Full — задание Модуля 1 выполнено.** 🚀
